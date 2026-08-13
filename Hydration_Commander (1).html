@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hydration Commander</title>
+  <script type="module">
+    import { joinRoom } from 'https://cdn.skypack.dev/trystero/torrent';
+    window.joinRoom = joinRoom;
+  </script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #141c2e;
+      --accent: #38bdf8;
+      --water: #0ea5e9;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--text); min-height: 100vh; line-height: 1.4;
+    }
+    .app { max-width: 520px; margin: 0 auto; padding: 12px; padding-bottom: 100px; }
+
+    .lobby {
+      position: fixed; inset: 0; background: var(--bg); z-index: 5000;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px;
+      text-align: center;
+    }
+    .lobby.hidden { display: none; }
+    .lobby img.portrait {
+      width: 140px; height: 140px; border-radius: 50%; object-fit: cover;
+      border: 4px solid #22c55e; box-shadow: 0 0 28px rgba(34,197,94,0.5); margin-bottom: 16px;
+    }
+    .lobby h1 {
+      font-size: 1.7rem; font-weight: 800;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px;
+    }
+    .lobby p { color: var(--muted); max-width: 340px; margin-bottom: 20px; font-size: 0.95rem; }
+    .lobby input {
+      width: 100%; max-width: 280px; padding: 14px; border-radius: 12px;
+      border: 2px solid #334155; background: var(--card); color: white; font-size: 1rem;
+      text-align: center; margin-bottom: 14px;
+    }
+    .lobby input:focus { outline: none; border-color: var(--accent); }
+    .lobby button {
+      padding: 14px 28px; border: none; border-radius: 12px; font-weight: 700;
+      font-size: 1rem; cursor: pointer; color: white;
+      background: linear-gradient(135deg, #0ea5e9, #22c55e);
+    }
+    .lobby .solo { background: #334155; margin-top: 14px; font-size: 0.85rem; padding: 10px 18px; }
+
+    header { text-align: center; padding: 10px 0 8px; }
+    header .top-row { display: flex; align-items: center; justify-content: center; gap: 12px; }
+    header img.portrait {
+      width: 56px; height: 56px; border-radius: 50%; object-fit: cover;
+      border: 3px solid #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.4);
+    }
+    header h1 { font-size: 1.25rem; font-weight: 800; margin: 0;
+      background: linear-gradient(90deg, #38bdf8, #22c55e);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    header .subtitle { color: var(--muted); font-size: 0.78rem; }
+    .badge {
+      display: inline-block; background: linear-gradient(135deg, #0ea5e9, #22c55e);
+      color: #0f172a; font-weight: 700; padding: 3px 12px; border-radius: 20px;
+      font-size: 0.75rem; margin-top: 6px;
+    }
+
+    .card {
+      background: var(--card); border-radius: 14px; padding: 14px;
+      margin-bottom: 12px; border: 1px solid #1e293b;
+    }
+    .card h2 { font-size: 0.95rem; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+    .army-box {
+      background: linear-gradient(135deg, #0c4a6e, #0f172a);
+      border: 2px solid #0ea5e9; border-radius: 14px; padding: 14px; text-align: center; margin-bottom: 12px;
+    }
+    .army-box .label { font-size: 0.75rem; color: #7dd3fc; text-transform: uppercase; letter-spacing: 1px; }
+    .army-box .count { font-size: 2.1rem; font-weight: 800; color: #38bdf8; line-height: 1.1; }
+    .army-box .sub { font-size: 0.75rem; color: var(--muted); }
+
+    .weather-row {
+      display: flex; justify-content: space-between; align-items: center;
+      background: #1e293b; border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; font-size: 0.85rem;
+    }
+    .weather-row .temp { font-weight: 700; color: #fbbf24; }
+    .weather-row .mod { color: #f87171; font-weight: 600; }
+
+    .body-map-container { max-width: 280px; margin: 0 auto 10px; }
+    .body-svg { width: 100%; height: auto; display: block; }
+    .body-region { cursor: pointer; transition: all 0.25s; stroke-width: 2; }
+    .body-region:hover { filter: brightness(1.2); stroke-width: 3; }
+    .body-region.friendly { fill: #166534; stroke: #22c55e; }
+    .body-region.enemy { fill: #7f1d1d; stroke: #ef4444; }
+    .body-region.contested { fill: #854d0e; stroke: #f59e0b; }
+    .region-label { pointer-events: none; font-weight: 700; font-size: 10px; fill: #f1f5f9; text-anchor: middle; }
+    .region-armies { pointer-events: none; font-weight: 800; font-size: 11px; fill: #38bdf8; text-anchor: middle; }
+    .region-armies.enemy-t { fill: #fca5a5; }
+    .legend { display: flex; justify-content: center; gap: 12px; font-size: 0.68rem; color: var(--muted); margin-bottom: 6px; }
+    .legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 3px; }
+
+    .size-row { display: flex; gap: 6px; justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .size-btn {
+      background: #1e293b; border: 2px solid transparent; color: var(--text);
+      border-radius: 18px; padding: 6px 11px; font-size: 0.78rem; font-weight: 600; cursor: pointer;
+    }
+    .size-btn.active { border-color: var(--accent); background: #0c4a6e; color: #7dd3fc; }
+    .drink-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .drink-btn {
+      border: none; border-radius: 11px; padding: 12px 6px; font-weight: 700; font-size: 0.85rem;
+      cursor: pointer; color: white; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .drink-btn:active { transform: scale(0.96); }
+    .drink-btn.water { background: linear-gradient(135deg, #0284c7, #0ea5e9); }
+    .drink-btn.tea { background: linear-gradient(135deg, #b45309, #d97706); }
+    .drink-btn.gatorade { background: linear-gradient(135deg, #15803d, #22c55e); }
+    .drink-btn.pop { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+    .drink-btn.alcohol { background: linear-gradient(135deg, #7c2d12, #c2410c); grid-column: span 2; }
+    .drink-btn .pts { font-size: 0.68rem; opacity: 0.9; font-weight: 500; }
+
+    .attack-panel {
+      background: #1a0a0a; border: 1px solid #7f1d1d; border-radius: 12px; padding: 12px; margin-top: 10px;
+    }
+    .attack-panel h3 { font-size: 0.9rem; color: #fca5a5; margin-bottom: 8px; }
+    .attack-panel .target { font-weight: 700; color: white; margin-bottom: 6px; }
+    .attack-panel input[type=number] {
+      width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #334155;
+      background: #0f172a; color: white; margin-bottom: 8px; font-size: 0.9rem;
+    }
+    .attack-btn {
+      width: 100%; padding: 12px; border: none; border-radius: 10px; font-weight: 800;
+      font-size: 0.95rem; cursor: pointer; color: white;
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+    }
+    .attack-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .player-row {
+      display: flex; justify-content: space-between; padding: 8px 10px;
+      background: #0f172a; border-radius: 8px; margin-bottom: 6px; font-size: 0.85rem;
+    }
+    .player-row.me { border: 1px solid #38bdf8; }
+    .player-row .pts { color: #86efac; font-weight: 700; }
+
+    .feedback {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-120px);
+      background: linear-gradient(135deg, #0ea5e9, #22c55e); color: #0f172a;
+      padding: 12px 18px; border-radius: 40px; font-weight: 800; font-size: 0.9rem;
+      z-index: 4000; transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      max-width: 90%; text-align: center; pointer-events: none;
+    }
+    .feedback.show { transform: translateX(-50%) translateY(0); }
+    .feedback.enemy { background: linear-gradient(135deg, #ef4444, #f97316); color: white; }
+
+    .video-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 6000;
+      display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .video-overlay.show { opacity: 1; pointer-events: auto; }
+    .video-overlay video {
+      max-width: 95vw; max-height: 80vh; border-radius: 12px;
+      box-shadow: 0 0 40px rgba(14,165,233,0.4);
+    }
+    .video-overlay .close-vid {
+      position: absolute; top: 16px; right: 16px; background: #ef4444; color: white;
+      border: none; border-radius: 50%; width: 40px; height: 40px; font-size: 1.2rem;
+      font-weight: 800; cursor: pointer;
+    }
+
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 5500;
+      display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    .modal-overlay.show { opacity: 1; pointer-events: auto; }
+    .modal {
+      background: var(--card); border-radius: 16px; padding: 22px; max-width: 340px; width: 92%;
+      text-align: center; border: 2px solid #22c55e;
+    }
+    .modal h2 { margin-bottom: 8px; }
+    .modal .dice { font-size: 1.6rem; margin: 10px 0; letter-spacing: 4px; }
+    .modal p { color: var(--muted); font-size: 0.9rem; margin-bottom: 12px; }
+
+    .bottom-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; background: #0b1220;
+      border-top: 1px solid #1e293b; padding: 10px; display: flex; gap: 8px; justify-content: center; z-index: 100;
+    }
+    .bottom-bar button {
+      background: #1e293b; border: 1px solid #334155; color: white;
+      padding: 10px 14px; border-radius: 10px; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+    }
+    .bottom-bar button.primary {
+      background: linear-gradient(135deg, #0ea5e9, #22c55e); color: #0f172a; border: none; font-weight: 800;
+    }
+
+    .history { max-height: 120px; overflow-y: auto; font-size: 0.75rem; color: var(--muted); }
+    .history-item { padding: 4px 0; border-bottom: 1px solid #1e293b; }
+
+    @media (max-width: 400px) {
+      .drink-grid { grid-template-columns: 1fr; }
+      .drink-btn.alcohol { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="lobby" id="lobby">
+    <img class="portrait" src="commander-rod.jpg" alt="Commander Rod">
+    <h1>Hydration Commander</h1>
+    <p>Enter your name and join the global battle. Build <strong>Aqua Soldiers</strong> by logging water for Commander Rod, then attack the <strong>Red Army of Dehydration</strong> ☭ across his body.</p>
+    <input type="text" id="playerName" placeholder="Your commander name" maxlength="16" autofocus>
+    <button onclick="joinGlobal()">Join the Battle</button>
+    <button class="solo" onclick="playSolo()">Play Solo (offline)</button>
+  </div>
+
+  <div class="app" id="game" style="display:none;">
+    <header>
+      <div class="top-row">
+        <img class="portrait" src="commander-rod.jpg" alt="Rod">
+        <div style="text-align:left;">
+          <h1>Hydration Commander</h1>
+          <div class="subtitle">Aqua Soldiers vs Red Army of Dehydration</div>
+        </div>
+      </div>
+      <div class="badge" id="statusBadge">Live Global Battle</div>
+    </header>
+
+    <div class="army-box">
+      <div class="label">Aqua Soldiers</div>
+      <div class="count" id="soldierCount">0</div>
+      <div class="sub">1 oz pure water = 1,000 soldiers</div>
+    </div>
+
+    <div class="weather-row">
+      <div>
+        <span id="weatherIcon">🌤</span>
+        <span id="weatherText">Loading weather…</span>
+      </div>
+      <div>
+        <span class="temp" id="tempDisplay">—°F</span>
+        <span class="mod" id="weatherMod">Enemy ×1.0</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Rod’s Hydration <span style="font-size:0.75rem;color:var(--muted);" id="waterLabel">0 / 90 oz</span></h2>
+      <div style="height:10px;background:#1e293b;border-radius:6px;overflow:hidden;">
+        <div id="waterBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0ea5e9,#38bdf8);transition:width 0.5s;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Body Battlefield <span style="font-size:0.72rem;color:var(--muted);" id="heldLabel">0/6 held</span></h2>
+      <div class="legend">
+        <span><i style="background:#166534;border:1px solid #22c55e;"></i>Aqua controlled</span>
+        <span><i style="background:#7f1d1d;border:1px solid #ef4444;"></i>Red Army ☭</span>
+      </div>
+      <div class="body-map-container" id="bodyMap"></div>
+
+      <div class="attack-panel">
+        <h3>⚔ Attack Red Army of Dehydration ☭</h3>
+        <div class="target">Target: <span id="attackTarget">Select a red region</span></div>
+        <label style="font-size:0.75rem;color:var(--muted);">Soldiers to commit</label>
+        <input type="number" id="attackForce" min="1000" step="1000" value="5000">
+        <button class="attack-btn" id="doAttackBtn" onclick="launchAttack()" disabled>Launch Attack</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Recruit Aqua Soldiers</h2>
+      <div class="size-row" id="sizeRow">
+        <button class="size-btn active" data-oz="8">8 oz</button>
+        <button class="size-btn" data-oz="12">12 oz</button>
+        <button class="size-btn" data-oz="16">16 oz</button>
+        <button class="size-btn" data-oz="20">20 oz</button>
+        <button class="size-btn" data-oz="24">24 oz</button>
+      </div>
+      <div class="drink-grid">
+        <button class="drink-btn water" onclick="logDrink('water')">💧 Water<span class="pts">+1,000 soldiers / oz</span></button>
+        <button class="drink-btn tea" onclick="logDrink('tea')">🍵 Tea<span class="pts">+330 soldiers / oz</span></button>
+        <button class="drink-btn gatorade" onclick="logDrink('gatorade')">⚡ Gatorade<span class="pts">+500 soldiers / oz</span></button>
+        <button class="drink-btn pop" onclick="logDrink('pop')">🥤 Pop<span class="pts">–2,000 / oz</span></button>
+        <button class="drink-btn alcohol" onclick="logDrink('alcohol')">🍺 Alcohol<span class="pts">–3,000 / oz</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Commanders <span style="font-size:0.75rem;color:var(--muted);" id="playerCount">0</span></h2>
+      <div id="playersList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Battle Log</h2>
+      <div class="history" id="history"></div>
+    </div>
+  </div>
+
+  <div class="bottom-bar" id="bottomBar" style="display:none;">
+    <button onclick="speakPraise()">🔊 Encourage</button>
+    <button class="primary" onclick="endDay()">🏁 End Day</button>
+  </div>
+
+  <div class="feedback" id="feedback"></div>
+
+  <div class="video-overlay" id="videoOverlay">
+    <button class="close-vid" onclick="closeVideo()">×</button>
+    <video id="attackVideo" playsinline controls></video>
+  </div>
+
+  <div class="modal-overlay" id="battleModal">
+    <div class="modal">
+      <h2 id="battleTitle">Battle Result</h2>
+      <div class="dice" id="battleDice">🎲 🎲</div>
+      <p id="battleMsg"></p>
+      <button class="attack-btn" style="background:linear-gradient(135deg,#0ea5e9,#22c55e);" onclick="closeBattleModal()">Continue</button>
+    </div>
+  </div>
+
+  <script>
+    const TERRITORIES = [
+      { id: 'brain', name: 'Brain', full: 'Brain Fortress' },
+      { id: 'heart', name: 'Heart', full: 'Heart Plains' },
+      { id: 'kidney', name: 'Kidneys', full: 'Kidney Highlands' },
+      { id: 'muscle', name: 'Muscles', full: 'Muscle Savannah' },
+      { id: 'joint', name: 'Joints', full: 'Joint Outposts' },
+      { id: 'energy', name: 'Energy', full: 'Energy Reserve' }
+    ];
+    const SOLDIERS = { water: 1000, tea: 330, gatorade: 500, pop: -2000, alcohol: -3000 };
+    const PRAISE = [
+      "Aqua Soldiers recruited, Commander!", "Excellent recruitment drive!",
+      "The pure water troops are elite!", "Rod’s army grows stronger!",
+      "Outstanding work for the cause!", "The Red Army will fear this!",
+      "Keep the pure water flowing!", "Victory through hydration!"
+    ];
+
+    let myId = null, myName = '', soloMode = false;
+    let room = null, sendAction = null;
+    let selectedRegion = null;
+    let weatherMod = 1.0;
+
+    let state = {
+      waterOz: 0, soldiers: 0, territories: {}, history: [], players: {}, streak: 0, selectedOz: 8
+    };
+    TERRITORIES.forEach(t => {
+      state.territories[t.id] = { aqua: 0, red: 8000 + Math.floor(Math.random()*5000) };
+    });
+
+    const storage = (() => {
+      try { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return localStorage; }
+      catch(e) { const m={}; return {getItem:k=>m[k]||null,setItem:(k,v)=>m[k]=String(v),removeItem:k=>delete m[k]}; }
+    })();
+
+    async function loadWeather() {
+      let temp = 79, desc = 'Partly cloudy', icon = '🌤';
+      try {
+        const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=41.40&longitude=-85.42&current=temperature_2m,relative_humidity_2m,weather_code&temperature_unit=fahrenheit');
+        const data = await res.json();
+        if (data.current) {
+          temp = Math.round(data.current.temperature_2m);
+          const code = data.current.weather_code;
+          const humidity = data.current.relative_humidity_2m || 50;
+          if (code <= 1) { desc = 'Clear'; icon = '☀️'; }
+          else if (code <= 3) { desc = 'Partly cloudy'; icon = '🌤'; }
+          else if (code <= 48) { desc = 'Foggy'; icon = '🌫'; }
+          else if (code <= 67) { desc = 'Rain'; icon = '🌧'; }
+          else { desc = 'Stormy'; icon = '⛈'; }
+
+          weatherMod = 1.0;
+          if (temp >= 88) weatherMod += 0.35;
+          else if (temp >= 82) weatherMod += 0.2;
+          else if (temp >= 75) weatherMod += 0.1;
+          else if (temp < 65) weatherMod -= 0.15;
+          if (humidity < 40) weatherMod += 0.15;
+          else if (humidity > 75) weatherMod -= 0.1;
+          if (code >= 51) weatherMod -= 0.2;
+          weatherMod = Math.max(0.7, Math.min(1.6, weatherMod));
+        }
+      } catch(e) { weatherMod = 1.1; }
+
+      document.getElementById('weatherIcon').textContent = icon;
+      document.getElementById('weatherText').textContent = desc;
+      document.getElementById('tempDisplay').textContent = temp + '°F';
+      document.getElementById('weatherMod').textContent = 'Enemy ×' + weatherMod.toFixed(2);
+    }
+
+    const GLOBAL_ROOM = 'ROD-HYDRATION-AQUA-GLOBAL-V2';
+
+    function joinGlobal() {
+      const name = document.getElementById('playerName').value.trim();
+      if (!name) { alert('Enter your commander name'); return; }
+      startMultiplayer(name);
+    }
+    function playSolo() {
+      myName = document.getElementById('playerName').value.trim() || 'Commander';
+      myId = 'solo-' + Date.now();
+      soloMode = true;
+      state.players[myId] = { name: myName, score: 0 };
+      enterGame();
+    }
+
+    async function startMultiplayer(name) {
+      myName = name; soloMode = false;
+      // Wait up to 5 seconds for the multiplayer library
+      let attempts = 0;
+      while (!window.joinRoom && attempts < 50) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+      // If library failed to load, just play solo (no error popup)
+      if (!window.joinRoom) {
+        console.warn('Multiplayer library not available – starting solo');
+        playSolo();
+        return;
+      }
+      try {
+        room = window.joinRoom({ appId: 'hydration-commander-aqua-2026' }, GLOBAL_ROOM);
+        myId = room.selfId || ('p' + Math.random().toString(36).slice(2, 8));
+        const [send, get] = room.makeAction('act');
+        sendAction = send;
+        get(onRemote);
+        room.onPeerJoin(() => {
+          send({ type: 'hello', id: myId, name: myName, score: state.players[myId]?.score || 0 });
+          send({ type: 'full', state: serialize() });
+        });
+        state.players[myId] = { name: myName, score: 0 };
+        setTimeout(() => {
+          try {
+            send({ type: 'hello', id: myId, name: myName, score: 0 });
+            send({ type: 'req' });
+          } catch (e) {}
+        }, 600);
+        enterGame();
+      } catch (e) {
+        console.warn('Multiplayer connection failed – starting solo', e);
+        playSolo();
+      }
+    }
+
+    function serialize() {
+      return { waterOz: state.waterOz, soldiers: state.soldiers, territories: state.territories, history: state.history.slice(0,15), players: state.players };
+    }
+
+    function onRemote(data) {
+      if (!data || !data.type) return;
+      if (data.type === 'hello') {
+        state.players[data.id] = { name: data.name, score: data.score||0 };
+        renderPlayers();
+      } else if (data.type === 'req') {
+        if (sendAction) sendAction({ type:'full', state: serialize() });
+      } else if (data.type === 'full' && data.state) {
+        if (data.state.waterOz > state.waterOz) state.waterOz = data.state.waterOz;
+        if (data.state.soldiers > state.soldiers) state.soldiers = data.state.soldiers;
+        if (data.state.territories) state.territories = data.state.territories;
+        if (data.state.players) Object.assign(state.players, data.state.players);
+        if (data.state.history) state.history = data.state.history;
+        render();
+      } else if (data.type === 'log') {
+        if (data.playerId === myId) return;
+        state.waterOz = data.waterOz;
+        state.soldiers = data.soldiers;
+        if (data.territories) state.territories = data.territories;
+        if (data.entry) state.history.unshift(data.entry);
+        if (data.playerId) {
+          if (!state.players[data.playerId]) state.players[data.playerId] = { name: data.playerName, score: 0 };
+          state.players[data.playerId].score = data.playerScore || 0;
+        }
+        showFeedback(data.playerName + ' recruited troops!', false);
+        render();
+      } else if (data.type === 'attack') {
+        if (data.territories) state.territories = data.territories;
+        if (data.soldiers !== undefined) state.soldiers = data.soldiers;
+        if (data.entry) state.history.unshift(data.entry);
+        render();
+      }
+    }
+
+    function broadcast(msg) {
+      if (sendAction && !soloMode) try { sendAction(msg); } catch(e){}
+    }
+
+    function enterGame() {
+      document.getElementById('lobby').classList.add('hidden');
+      document.getElementById('game').style.display = 'block';
+      document.getElementById('bottomBar').style.display = 'flex';
+      document.getElementById('statusBadge').textContent = soloMode ? 'Solo Mode' : 'Live Global Battle';
+      loadWeather();
+      render();
+      setTimeout(() => {
+        showFeedback('Welcome ' + myName + '! Recruit Aqua Soldiers for Rod.', false);
+        speak('Welcome ' + myName + '. Recruit Aqua Soldiers and attack the Red Army.');
+      }, 400);
+    }
+
+    function logDrink(type) {
+      const oz = state.selectedOz || 8;
+      const gain = SOLDIERS[type] * oz;
+      state.soldiers = Math.max(0, state.soldiers + gain);
+      if (type === 'water') state.waterOz += oz;
+      if (!state.players[myId]) state.players[myId] = { name: myName, score: 0 };
+      if (gain > 0) state.players[myId].score += gain / 1000;
+
+      const labels = { water:'💧 Water', tea:'🍵 Tea', gatorade:'⚡ Gatorade', pop:'🥤 Pop', alcohol:'🍺 Alcohol' };
+      const entry = { text: myName + ': ' + labels[type] + ' ' + oz + ' oz → ' + (gain>=0?'+':'') + gain.toLocaleString() + ' soldiers', pts: gain };
+      state.history.unshift(entry);
+
+      broadcast({ type:'log', playerId:myId, playerName:myName, waterOz:state.waterOz, soldiers:state.soldiers, territories:state.territories, entry, playerScore: state.players[myId].score });
+
+      if (gain > 0) {
+        showFeedback('+' + gain.toLocaleString() + ' Aqua Soldiers!', false);
+        speak(PRAISE[Math.floor(Math.random()*PRAISE.length)]);
+      } else {
+        showFeedback('Desertion! ' + gain.toLocaleString() + ' soldiers lost.', true);
+      }
+      render();
+    }
+
+    function selectRegion(id) {
+      selectedRegion = id;
+      const t = TERRITORIES.find(x => x.id === id);
+      const ter = state.territories[id];
+      document.getElementById('attackTarget').textContent = t.full + (ter.red > 0 ? ' ☭' : ' ✓');
+      document.getElementById('doAttackBtn').disabled = false;
+      const suggested = Math.min(state.soldiers, Math.max(2000, Math.floor(ter.red * 0.6)));
+      document.getElementById('attackForce').value = suggested || 5000;
+    }
+
+    function launchAttack() {
+      if (!selectedRegion) { showFeedback('Select a body region first', true); return; }
+      const force = parseInt(document.getElementById('attackForce').value) || 0;
+      if (force < 1000) { showFeedback('Commit at least 1,000 soldiers', true); return; }
+      if (force > state.soldiers) { showFeedback('Not enough Aqua Soldiers!', true); return; }
+
+      const ter = state.territories[selectedRegion];
+      const t = TERRITORIES.find(x => x.id === selectedRegion);
+      const enemyStr = Math.floor(ter.red * weatherMod);
+
+      let atkLeft = force;
+      let defLeft = enemyStr;
+      let rounds = 0;
+      let atkDiceLog = [], defDiceLog = [];
+
+      while (atkLeft > 0 && defLeft > 0 && rounds < 12) {
+        rounds++;
+        const aDice = Math.min(3, Math.ceil(atkLeft / 3000));
+        const dDice = Math.min(2, Math.ceil(defLeft / 3000));
+        const aRolls = [], dRolls = [];
+        for (let i=0;i<aDice;i++) aRolls.push(Math.floor(Math.random()*6)+1 + 1); // +1 quality for pure water troops
+        for (let i=0;i<dDice;i++) dRolls.push(Math.floor(Math.random()*6)+1);
+        aRolls.sort((a,b)=>b-a); dRolls.sort((a,b)=>b-a);
+        const compares = Math.min(aRolls.length, dRolls.length);
+        for (let i=0;i<compares;i++) {
+          if (aRolls[i] > dRolls[i]) defLeft = Math.max(0, defLeft - Math.floor(800 + Math.random()*600));
+          else atkLeft = Math.max(0, atkLeft - Math.floor(700 + Math.random()*500));
+        }
+        if (rounds <= 2) { atkDiceLog.push(aRolls.join(',')); defDiceLog.push(dRolls.join(',')); }
+      }
+
+      const soldiersLost = force - atkLeft;
+      state.soldiers = Math.max(0, state.soldiers - soldiersLost);
+      const newRed = Math.max(0, Math.floor(defLeft / weatherMod));
+      ter.red = newRed;
+      if (ter.red <= 0) {
+        ter.aqua = Math.max(ter.aqua, Math.floor(atkLeft * 0.3));
+        ter.red = 0;
+      } else {
+        ter.aqua += Math.floor((force - soldiersLost) * 0.1);
+      }
+
+      const victory = ter.red <= 0;
+      const entry = { text: myName + ' attacked ' + t.name + ': ' + (victory ? 'VICTORY' : 'fought') + ' (−' + soldiersLost.toLocaleString() + ')', pts: victory ? 5000 : -soldiersLost };
+      state.history.unshift(entry);
+
+      broadcast({ type:'attack', territories: state.territories, soldiers: state.soldiers, entry });
+
+      document.getElementById('battleTitle').textContent = victory ? 'VICTORY!' : 'Battle Concluded';
+      document.getElementById('battleDice').textContent = '⚔ ' + (atkDiceLog[0]||'—') + ' vs ☭ ' + (defDiceLog[0]||'—');
+      document.getElementById('battleMsg').textContent = victory
+        ? t.full + ' liberated from the Red Army! ' + soldiersLost.toLocaleString() + ' Aqua Soldiers fell heroically.'
+        : 'Heavy fighting at ' + t.full + '. Enemy remaining: ' + ter.red.toLocaleString() + '. Lost ' + soldiersLost.toLocaleString() + ' soldiers.';
+      document.getElementById('battleModal').classList.add('show');
+
+      playAttackVideo(force);
+
+      if (victory) { speak('Victory! ' + t.full + ' is liberated!'); showFeedback('☭ ' + t.full + ' captured!', false); }
+      else speak('Hard fought battle at ' + t.name + '.');
+
+      selectedRegion = null;
+      document.getElementById('doAttackBtn').disabled = true;
+      render();
+    }
+
+    function playAttackVideo(force) {
+      const vid = document.getElementById('attackVideo');
+      let src = 'WaterBalloon.mp4';
+      if (force >= 25000) src = 'AirStrike.mp4';
+      else if (force >= 10000) src = 'WaterCannon.mp4';
+      vid.src = src;
+      document.getElementById('videoOverlay').classList.add('show');
+      vid.play().catch(()=>{});
+      vid.onended = () => closeVideo();
+    }
+    function closeVideo() {
+      const vid = document.getElementById('attackVideo');
+      vid.pause();
+      document.getElementById('videoOverlay').classList.remove('show');
+    }
+    function closeBattleModal() { document.getElementById('battleModal').classList.remove('show'); }
+
+    function getRegionClass(id) {
+      const ter = state.territories[id];
+      if (ter.red <= 0 && ter.aqua > 0) return 'friendly';
+      if (ter.red > ter.aqua) return 'enemy';
+      return 'contested';
+    }
+    function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1)+'k' : n; }
+
+    function renderBodyMap() {
+      const c = document.getElementById('bodyMap');
+      if (!c) return;
+      c.innerHTML = '<svg class="body-svg" viewBox="0 0 280 440" xmlns="http://www.w3.org/2000/svg">' +
+        '<ellipse class="body-region ' + getRegionClass('brain') + '" cx="140" cy="50" rx="44" ry="48" onclick="selectRegion(\'brain\')"/>' +
+        '<text class="region-label" x="140" y="42">Brain</text>' +
+        '<text class="region-armies ' + (getRegionClass('brain')==='enemy'?'enemy-t':'') + '" x="140" y="58">' + fmt(state.territories.brain.aqua) + '/' + fmt(state.territories.brain.red) + '</text>' +
+        '<rect x="124" y="94" width="32" height="18" rx="4" fill="#1e293b" stroke="#475569"/>' +
+        '<path class="body-region ' + getRegionClass('heart') + '" d="M92 114 L188 114 Q205 114 205 132 L205 198 Q205 214 188 214 L92 214 Q75 214 75 198 L75 132 Q75 114 92 114 Z" onclick="selectRegion(\'heart\')"/>' +
+        '<text class="region-label" x="140" y="150">Heart</text>' +
+        '<text class="region-armies ' + (getRegionClass('heart')==='enemy'?'enemy-t':'') + '" x="140" y="168">' + fmt(state.territories.heart.aqua) + '/' + fmt(state.territories.heart.red) + '</text>' +
+        '<path class="body-region ' + getRegionClass('kidney') + '" d="M88 216 L192 216 Q205 216 205 230 L205 275 Q205 290 188 290 L92 290 Q75 290 75 275 L75 230 Q75 216 88 216 Z" onclick="selectRegion(\'kidney\')"/>' +
+        '<text class="region-label" x="140" y="246">Kidneys</text>' +
+        '<text class="region-armies ' + (getRegionClass('kidney')==='enemy'?'enemy-t':'') + '" x="140" y="264">' + fmt(state.territories.kidney.aqua) + '/' + fmt(state.territories.kidney.red) + '</text>' +
+        '<path class="body-region ' + getRegionClass('energy') + '" d="M95 292 L185 292 Q198 292 198 305 L192 345 Q185 360 168 360 L112 360 Q95 360 88 345 L82 305 Q82 292 95 292 Z" onclick="selectRegion(\'energy\')"/>' +
+        '<text class="region-label" x="140" y="318">Energy</text>' +
+        '<text class="region-armies ' + (getRegionClass('energy')==='enemy'?'enemy-t':'') + '" x="140" y="336">' + fmt(state.territories.energy.aqua) + '/' + fmt(state.territories.energy.red) + '</text>' +
+        '<path class="body-region ' + getRegionClass('muscle') + '" d="M74 122 L48 128 L22 210 L35 220 L68 155 L74 148 Z M206 122 L232 128 L258 210 L245 220 L212 155 L206 148 Z" onclick="selectRegion(\'muscle\')"/>' +
+        '<text class="region-label" x="38" y="165" style="font-size:9px">Muscles</text>' +
+        '<text class="region-armies ' + (getRegionClass('muscle')==='enemy'?'enemy-t':'') + '" x="38" y="180" style="font-size:10px">' + fmt(state.territories.muscle.aqua) + '/' + fmt(state.territories.muscle.red) + '</text>' +
+        '<path class="body-region ' + getRegionClass('joint') + '" d="M112 362 L98 420 Q96 432 110 432 L128 432 Q138 432 136 420 L140 375 L144 420 Q142 432 152 432 L170 432 Q184 432 182 420 L168 362 Z" onclick="selectRegion(\'joint\')"/>' +
+        '<text class="region-label" x="140" y="393">Joints</text>' +
+        '<text class="region-armies ' + (getRegionClass('joint')==='enemy'?'enemy-t':'') + '" x="140" y="410">' + fmt(state.territories.joint.aqua) + '/' + fmt(state.territories.joint.red) + '</text>' +
+        '</svg>';
+    }
+
+    function renderPlayers() {
+      const list = document.getElementById('playersList');
+      const entries = Object.entries(state.players).sort((a,b)=>(b[1].score||0)-(a[1].score||0));
+      document.getElementById('playerCount').textContent = entries.length + ' online';
+      list.innerHTML = entries.map(([id,p]) =>
+        '<div class="player-row ' + (id===myId?'me':'') + '"><span>' + p.name + (id===myId?' (you)':'') + '</span><span class="pts">' + (p.score||0).toFixed(1) + 'k pts</span></div>'
+      ).join('') || '<div style="color:#64748b;padding:6px;">Waiting for commanders…</div>';
+    }
+
+    function render() {
+      document.getElementById('soldierCount').textContent = state.soldiers.toLocaleString();
+      const pct = Math.min(100, (state.waterOz/90)*100);
+      document.getElementById('waterBar').style.width = pct + '%';
+      document.getElementById('waterLabel').textContent = state.waterOz.toFixed(1) + ' / 90 oz';
+      let held = 0;
+      TERRITORIES.forEach(t => { if (state.territories[t.id].red <= 0) held++; });
+      document.getElementById('heldLabel').textContent = held + '/6 held';
+      renderBodyMap();
+      renderPlayers();
+      const hist = document.getElementById('history');
+      hist.innerHTML = state.history.slice(0,12).map(h => '<div class="history-item">' + h.text + '</div>').join('') || '<div style="color:#64748b;padding:4px;">No actions yet.</div>';
+      document.querySelectorAll('.size-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.oz) === (state.selectedOz||8));
+      });
+    }
+
+    function showFeedback(text, isEnemy) {
+      const el = document.getElementById('feedback');
+      el.textContent = text;
+      el.className = 'feedback' + (isEnemy?' enemy':'') + ' show';
+      setTimeout(()=>el.classList.remove('show'), 3200);
+    }
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.rate = 0.95; u.volume = 0.9;
+        speechSynthesis.speak(u);
+      }
+    }
+    function speakPraise() {
+      const p = PRAISE[Math.floor(Math.random()*PRAISE.length)];
+      showFeedback(p, false); speak(p);
+    }
+    function endDay() {
+      const held = TERRITORIES.filter(t => state.territories[t.id].red <= 0).length;
+      const msg = state.waterOz >= 90
+        ? 'Rod hit 90 oz and holds ' + held + '/6 regions. Outstanding!'
+        : 'Rod has ' + state.waterOz.toFixed(0) + ' oz and ' + held + '/6 regions. Keep recruiting!';
+      showFeedback(msg, false); speak(msg);
+    }
+
+    document.getElementById('sizeRow').addEventListener('click', e => {
+      if (e.target.classList.contains('size-btn')) {
+        state.selectedOz = parseInt(e.target.dataset.oz);
+        render();
+      }
+    });
+    document.getElementById('playerName').addEventListener('keydown', e => {
+      if (e.key === 'Enter') joinGlobal();
+    });
+    if ('speechSynthesis' in window) speechSynthesis.getVoices();
+  </script>
+</body>
+</html>
